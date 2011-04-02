@@ -1,0 +1,8 @@
+Line 6: Type mismatch in return statement
+Line 14: Type mismatch in assignment
+Line 16: Function f1 expecting 2 paramaters
+Line 17: Type mismatch in assignment
+Line 18: Type mismatch in assignment
+Line 19: Only integer parameters allowed
+Line 20: Undeclared function f3
+Line 21: Variable b is not a function

@@ -1,0 +1,6 @@
+Line 1: Duplicate declaration of x
+Line 3: Undeclared function incr
+Line 8: Duplicate declaration of x
+Line 14: Duplicate declaration of add
+Line 15: Undeclared variable y
+Line 19: Undeclared variable x
