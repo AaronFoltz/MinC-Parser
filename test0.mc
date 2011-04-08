@@ -10,15 +10,10 @@ Foltz f;
 Foltz b;
 int incr (int x) 
 {
-	{
-		bool y;
-		int z;
-		b.x = x+getint();
-		a[3] = 5;
-		return(b.x);
-	}
-  x = 5;
-  return (x + 1);
+	b.x = true;
+	x = 5;
+	
+  return (x);
 }
 
 int add (int x, int y, int z) {

@@ -1,6 +1,13 @@
 %{
 import java.io.*;
 import java.util.*;
+/**
+ * Aaron Foltz
+ * CS540 - Program 3
+ *
+ * Of Note:  I had originally planned functions to take both boolean and integer formal parameters, so when I 
+ * 			restricted it to only integers, some residual code got left over.
+ */
 %}
  
 %token ID NUM IF ELSE WHILE TRUE FALSE BOOL INT TYPE_ID RETURN PRINTINT GETINT ASSIGN_OP REL_OP LOGICAL_OP
@@ -36,34 +43,74 @@ fn_decl: type ID {
 					//  	return checking.
 					currentFunct = $2; 
 					enterScope();
+					
+					// Check to see that the function returns a base type
+					if(!($1.val.equals("int") || $1.val.equals("bool"))){
+						yyfunctionError($2.val, 4, 0);
+						$2.type = "int";
+					}
+					
 				  } params '{' var_decls statements '}'	{
 																exitScope();
 															}
 	;
 
 var_decl:	type ID ';' {
-							insert($2, $1.val);
-							
 							// IF null, it isn't a type
-							if($1.type == null){}
+							if($1.type == null){$$.type = "base"; insert($2, $1.val);}
 							
 							// IF it is declaring a type, make sure that type exists
 							else{
+
 								if($1.type.equals("type")){
-									// Set the parameters of the declaration to the parent
-									//	This is the members of the struct
-									$2.typeParams = lookup($1,3).typeParams;
-									// Length of the array
-									$2.length = lookup($1,3).length;
-									//	Type of the declared identifier (from the parent)
-									$2.parentType = lookup($1,3).type;
+									
+									// We are in a function scope and a variable  with type TYPE
+									//  is being declared
+									if(symbolTable.size() > 1){
+										yytypeError(null,null,null,5);
+									}else{
+										
+										typeCalled = lookup($1,3);
+										// If the type referenced exists
+										if(!typeCalled.type.equals("default")){
+											insert($2, $1.val);
+											// Set the parameters of the declaration to the parent
+											//	This is the members of the struct
+											$2.typeParams = typeCalled.typeParams;
+											// Length of the array
+											$2.length = typeCalled.length;
+											//	Type of the declared identifier (from the parent)
+											$2.parentType = typeCalled.type;
+										}
+									}
 								}
 							}
 							
 						}
 	;
 
-type_decl:	type '[' NUM ']' TYPE_ID ';' {insert($5, $1.val); $5.length = Integer.parseInt($3.val);}
+type_decl:	type '[' NUM ']' TYPE_ID ';' {
+											// The array is of a base type
+											if($1.type == null){
+												$$.type = "base";
+												insert($5, $1.val); $5.length = Integer.parseInt($3.val);
+												$5.parentType = $1.val;
+											}
+											
+											// The array is of a user-defined type
+											else{
+												// Find the type
+												typeCalled = lookup($1,3);
+												
+												// If the type exists, add the array with that type.
+												if(!typeCalled.type.equals("default")){
+													insert($5, $1.val); $5.length = Integer.parseInt($3.val);
+													$5.parentType = $1.val;
+												}
+												
+											}
+										  }
+										  
 	|		'{' {struct.clear();} type_list '}' TYPE_ID ';' {
 																insert($5, "type_list");
 																// The members of this struct were calculated in type_list
@@ -71,13 +118,70 @@ type_decl:	type '[' NUM ']' TYPE_ID ';' {insert($5, $1.val); $5.length = Integer
 															 }
 	;
 
-type_list:	type_list type ID ';' {		// Add to list of members of the struct
-										struct.push($3);
-										insert($3, $2.val);
+type_list:	type_list type ID ';' {		
+										// IF null, it isn't a user type
+										if($2.type == null){$$.type = "base"; insert($3, $2.val); struct.push($3);}
+										
+										// IF it is declaring a type, make sure that type exists
+										else{
+			
+											if($2.type.equals("type")){
+													
+												typeCalled = lookup($2,3);
+												
+												// If the type referenced exists
+												if(!typeCalled.type.equals("default")){
+													
+													// Insert into the current scope (global)
+													insert($3, $2.val);
+													
+													// Add to list of members of the struct
+													struct.push($3);
+													
+													// Set the parameters of the declaration to the parent
+													//	This is the members of the struct
+													$3.typeParams = typeCalled.typeParams;
+													// Length of the array
+													$3.length = typeCalled.length;
+													//	Type of the declared identifier (from the parent)
+													$3.parentType = typeCalled.type;
+												}
+												
+											}
+										}
+										
 									}
-	|		type ID ';' {	// Add to list of members of the struct
-							struct.push($3);
-							insert($2, $1.val);
+	|		type ID ';' {	
+							// IF null, it isn't a type
+							if($1.type == null){$$.type = "base"; insert($2, $1.val); struct.push($2);}
+							
+							// IF it is declaring a type, make sure that type exists
+							else{
+
+								if($1.type.equals("type")){
+										
+									typeCalled = lookup($1,3);
+									
+									// If the type referenced exists
+									if(!typeCalled.type.equals("default")){
+										
+										// Insert into the current scope (global)
+										insert($2, $1.val);
+										
+										// Add to list of members of the struct
+										struct.push($2);
+										
+										// Set the parameters of the declaration to the parent
+										//	This is the members of the struct
+										$2.typeParams = typeCalled.typeParams;
+										// Length of the array
+										$2.length = typeCalled.length;
+										//	Type of the declared identifier (from the parent)
+										$2.parentType = typeCalled.type;
+									}
+									
+								}
+							}
 						}
 	;
 
@@ -90,20 +194,49 @@ params:	'(' ')'
 	|		'(' param_list ')'
 	;
 
-param_list:	param_list ',' type ID {
-										// IF not already declared, add it to the list of parameters
-										// 	for the current function
-										if(!insert($4, $3.val)){
-											currentFunct.parameters.push($3.val);
+param_list:	param_list ',' type ID {	
+										// Formal parameters must be of type int
+										if($3.val.equals("int")){
+											
+											// IF not already declared, add it to the list of parameters
+											// 	for the current function
+											if(!insert($4, $3.val)){
+												currentFunct.parameters.push($3.val);
+											}
+											
+										// The parameters were not of type int
+										}else{
+											
+											yyfunctionError(currentFunct.val, 5,0);
+											
+											// IF not already declared, add it to the list of parameters
+											// 	for the current function - with type int
+											if(!insert($4, "int")){
+												currentFunct.parameters.push("int");
+											}
 										}
+										
 									}
-	|		type ID {
-						// IF not already declared, add it to the list of parameters
-						// 	for the current function
-						if(!insert($2, $1.val)){
-							currentFunct.parameters.push($1.val);
+	|		type ID {	// Formal parameters must be of type int
+						if($1.val.equals("int")){
+							
+							// IF not already declared, add it to the list of parameters
+							// 	for the current function
+							if(!insert($2, $1.val)){
+								currentFunct.parameters.push($1.val);
+							}
+							
+						// The parameters were not of type int
+						}else{
+							
+							yyfunctionError(currentFunct.val, 5,0);
+							
+							// IF not already declared, add it to the list of parameters
+							// 	for the current function - with type int
+							if(!insert($2, "int")){
+								currentFunct.parameters.push("int");
+							}
 						}
-						
 					}
 	;
 
@@ -243,9 +376,8 @@ var:	ID {
 	|	ID '[' expression ']' {	
 									// Lookup the array on the symbol table
 									arrayCalled = lookup($1,1);
-									
 									// There is an variable of that type
-									if(arrayCalled.val != null){
+									if(arrayCalled.val != null || arrayCalled.parentType !=null){
 										
 										// The type referenced is not an array
 										if(arrayCalled.type.equals("int") || arrayCalled.type.equals("bool") || arrayCalled.parentType.equals("type_list")){
@@ -362,7 +494,7 @@ bool1:	LOGICAL_NOT bool1 {
 								$$.type = "bool";
 								$$.val = "expression";
 							}
-					  }
+					  	 }
 	|	bool2 {$$.type = $1.type;}
 	;
 
@@ -516,7 +648,7 @@ factor:	'(' expression ')'	{$$.type = $2.type;$$.val = $2.val;}
 											
 										// No such funciton exists - return the type of the current function
 										//  that we are in.  This resolves returning undeclared functions
-										//  and the resulting type error from incorrect return type
+										//  and the resulting type error from incorrect return types
 										}else{
 											$$.type = currentFunct.type;
 										}
@@ -552,9 +684,10 @@ factor:	'(' expression ')'	{$$.type = $2.type;$$.val = $2.val;}
 	// structCalled - holds the struct that was looked up
 	// arrayCalled - holds the array that was just looked up
 	// varCalled - holds the variable that was just looked up
-	private Semantic currentFunct, functionCalled, structCalled, arrayCalled, varCalled;
+	// typeCalled - holds the type (array or struct) that was looked up
+	private Semantic currentFunct, functionCalled, structCalled, arrayCalled, varCalled, typeCalled;
 	
-	// lexer - an instance of the lex scanner
+	// lexer - an instance of the lexical scanner
 	private Lexer lexer;
 	
 	// parametersInCall - List which holds the types of the parameters in a function call
@@ -600,6 +733,13 @@ factor:	'(' expression ')'	{$$.type = $2.type;$$.val = $2.val;}
 		System.err.println("String rejected");
 	}
 	
+	/**
+	 * Error printing function used for general type errors
+	 * @param id - The name of the identitifer with the problem
+	 * @param type - the type of the identifier (given)
+	 * @param expectedType - the expected type of the identifier
+	 * @param error - the error number
+	 */
 	private void yytypeError(String id, String type, String expectedType, int error){
 		switch(error){
 		case 1: System.out.println("Line " + lexer.getLine() + ": Type Error - " + id + " expected to be " 
@@ -612,9 +752,18 @@ factor:	'(' expression ')'	{$$.type = $2.type;$$.val = $2.val;}
 					+ expectedType);
 			break;	
 		case 4: System.out.println("Line " + lexer.getLine() + ": Indexing outside of array " + id);
+			break;
+		case 5: System.out.println("Line " + lexer.getLine() + ": Only base types can be declared inside a function" );
+				break;
 		}
 	}
 	
+	/**
+	 * Error printing function used for errors dealing with functions
+	 * @param id - The name of the function with the problem
+	 * @param error - the error number
+	 * @param numParams - the number of parameters associated with the function
+	 */
 	private void yyfunctionError(String id, int error, int numParams){
 		switch(error){
 			case 1:	System.out.println("Line " + lexer.getLine() + ": " + id + " must accept at least one parameter");
@@ -622,6 +771,10 @@ factor:	'(' expression ')'	{$$.type = $2.type;$$.val = $2.val;}
 			case 2: System.out.println("Line " + lexer.getLine() + ": " + id + " must accept " + numParams + " parameters");
 				break;
 			case 3: System.out.println("Line " + lexer.getLine() + ": " + id + " cannot accept those parameter types");
+				break;
+			case 4: System.out.println("Line " + lexer.getLine() + ": " + id + " must return a base type");
+				break;
+			case 5: System.out.println("Line " + lexer.getLine() + ": " + id + " must have formal parameters of type int");
 				break;
 		}
 	}
@@ -647,6 +800,8 @@ factor:	'(' expression ')'	{$$.type = $2.type;$$.val = $2.val;}
 	 
 	 /**
 	  * Inserts the identifier and its type into the current scope if it is not already there.
+	  * @param id - the Semantic object associated with an identifier/function/type
+	  * @param type - the Type associated with the identifier/function/type
 	  * @return boolean - If the identifier is already in the current scope
 	  */
 	 
@@ -682,7 +837,6 @@ factor:	'(' expression ')'	{$$.type = $2.type;$$.val = $2.val;}
 	  */
 	 @SuppressWarnings("unchecked")
 	 private Semantic lookup(Semantic value, int error){
-		 //@@System.out.println("LOOKUP: " + value.val);
 		 
 		 // Grab the current local scope
 		 scope = (LinkedList) symbolTable.peek();

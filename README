@@ -1,1 +1,10 @@
-Run the complete bash script p3.sh.  Included are a few test files (all .mc) that can be run from the bash script (by changing the final command).
+./yacc.macosx -v -Jsemantic=Semantic Parser.y
+javac Parser.java
+
+java -jar JFlex.jar Lexer.l
+javac Lexer.java
+
+java Parser test0.mc
+
+
+The commands above can be used to run this program.  You must have the yacc executable available in the current directory (you can find it at http://byaccj.sourceforge.net/#download).
